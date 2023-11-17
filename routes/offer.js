@@ -16,119 +16,155 @@ router.post(
       const { title, description, price, condition, city, brand, size, color } =
         req.body;
 
-      if (title.length > 50) {
-        return res
+      if (title && price && req.files?.picture) {
+        if (title.length > 50) {
+          return res
+            .status(400)
+            .json({ message: "Maximum title length is 50 characters" });
+        } else if (description.length > 500) {
+          return res
+            .status(400)
+            .json({ message: "Maximum description length is 500 characters" });
+        } else if (price > 100000) {
+          return res
+            .status(400)
+            .json({ message: "Maximum price is 100000 Euros" });
+        }
+
+        const newOffer = new Offer({
+          product_name: title,
+          product_description: description,
+          product_price: price,
+          product_details: [
+            { MARQUE: brand },
+            { TAILLE: size },
+            { ETAT: condition },
+            { COULEUR: color },
+            { EMPLACEMENT: city },
+          ],
+          owner: req.user,
+        });
+
+        console.log(req.files.picture);
+
+        if (!Array.isArray(req.files.picture)) {
+          if (req.files.picture.mimetype.slice(0, 5) !== "image") {
+            return res
+              .status(400)
+              .json({ message: "The file must be a picture" });
+          }
+          const result = await cloudinary.uploader.upload(
+            convertToBase64(req.files.picture),
+            { folder: `vinted/offers/${newOffer._id}` }
+          );
+          newOffer.product_image = result;
+          newOffer.product_pictures.push(result);
+        } else {
+          for (let i = 0; i < req.files.picture.length; i++) {
+            const picture = req.files.picture[i];
+            if (picture.mimetype.slice(0, 5) !== "image") {
+              return res
+                .status(400)
+                .json({ message: "The file must be a picture" });
+            }
+            if (i === 0) {
+              const result = await cloudinary.uploader.upload(
+                convertToBase64(picture),
+                { folder: `vinted/offers/${newOffer._id}` }
+              );
+              newOffer.product_image = result;
+              newOffer.product_pictures.push(result);
+            } else {
+              const result = await cloudinary.uploader.upload(
+                convertToBase64(picture),
+                { folder: `vinted/offers/${newOffer._id}` }
+              );
+              newOffer.product_pictures.push(result);
+            }
+          }
+        }
+        await newOffer.save();
+        res.status(201).json(newOffer);
+      } else {
+        res
           .status(400)
-          .json({ message: "Maximum title length is 50 characters" });
-      } else if (description.length > 500) {
-        return res
-          .status(400)
-          .json({ message: "Maximum description length is 500 characters" });
-      } else if (price > 100000) {
-        return res
-          .status(400)
-          .json({ message: "Maximum price is 100000 Euros" });
+          .json({ message: "Title, price and picture are required" });
       }
-
-      const newOffer = new Offer({
-        product_name: title,
-        product_description: description,
-        product_price: price,
-        product_details: [
-          { MARQUE: brand },
-          { TAILLE: size },
-          { ETAT: condition },
-          { COULEUR: color },
-          { EMPLACEMENT: city },
-        ],
-        owner: req.user,
-      });
-
-      if (req.files) {
-        const pictureToUpload = req.files.picture;
-        const result = await cloudinary.uploader.upload(
-          convertToBase64(pictureToUpload),
-          { folder: `vinted/offers/${newOffer._id}` }
-        );
-
-        newOffer.product_image = result;
-      }
-
-      await newOffer.save();
-      res.status(201).json(
-        newOffer
-        //   {
-        //   _id: newOffer._id,
-        //   product_name: newOffer.product_name,
-        //   product_description: newOffer.product_description,
-        //   product_price: newOffer.product_price,
-        //   product_details: newOffer.product_details,
-        //   owner: req.user,
-        //   product_image: newOffer.product_image,
-        // }
-      );
     } catch (error) {
       res.status(500).json({ message: error.message });
     }
   }
 );
 
-router.put("/offer/modify", isAuthenticated, fileUpload(), async (req, res) => {
-  try {
-    const { title, description, price, condition, city, brand, size, color } =
-      req.body;
-    const offerToModify = await Offer.findById(req.body.id);
+router.put(
+  "/offer/modify/:id",
+  isAuthenticated,
+  fileUpload(),
+  async (req, res) => {
+    try {
+      const offerToModify = await Offer.findById(req.params.id);
+      const { title, description, price, condition, city, brand, size, color } =
+        req.body;
 
-    if (title) offerToModify.product_name = title;
-    if (description) offerToModify.product_description = description;
-    if (price) offerToModify.product_price = price;
-    if (condition) offerToModify.product_details[2].ETAT = condition;
-    if (city) offerToModify.product_details[4].EMPLACEMENT = city;
-    if (brand) offerToModify.product_details[0].MARQUE = brand;
-    if (size) offerToModify.product_details[1].TAILLE = size;
-    if (color) offerToModify.product_details[3].COULEUR = color;
-    if (req.files) {
-      const pictureToUpload = req.files.picture;
-      const result = await cloudinary.uploader.upload(
-        convertToBase64(pictureToUpload),
-        { folder: `vinted/offers/${offerToModify._id}` }
-      );
+      if (title) offerToModify.product_name = title;
+      if (description) offerToModify.product_description = description;
+      if (price) offerToModify.product_price = price;
 
-      offerToModify.product_image.secure_url1 = result.secure_url;
+      const detail = offerToModify.product_details;
+      for (let i = 0; i < detail.length; i++) {
+        if (detail[i].MARQUE) {
+          if (brand) detail[i].MARQUE = brand;
+        }
+        if (detail[i].TAILLE) {
+          if (size) detail[i].TAILLE = size;
+        }
+        if (detail[i].ETAT) {
+          if (condition) detail[i].ETAT = condition;
+        }
+        if (detail[i].COULEUR) {
+          if (color) detail[i].COULEUR = color;
+        }
+        if (detail[i].EMPLACEMENT) {
+          if (city) detail[i].EMPLACEMENT = city;
+        }
+      }
+      offerToModify.markModified("product_details");
+
+      if (req.files?.picture) {
+        await cloudinary.uploader.destroy(
+          offerToModify.product_image.public_id
+        );
+
+        const result = await cloudinary.uploader.upload(
+          convertToBase64(req.files.picture),
+          { folder: `vinted/offers/${offerToModify._id}` }
+        );
+
+        offerToModify.product_image = result;
+        newOffer.product_pictures[0] = result;
+      }
+
+      await offerToModify.save();
+
+      res.json({ message: "Offer modified succesfully" });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
-
-    console.log(offerToModify.product_details[1].TAILLE);
-    await offerToModify.save();
-
-    res.json({
-      _id: offerToModify._id,
-      product_name: offerToModify.product_name,
-      product_description: offerToModify.product_description,
-      product_price: offerToModify.product_price,
-      product_details: offerToModify.product_details,
-      owner: {
-        account: offerToModify.owner.account,
-        _id: offerToModify.owner._id,
-      },
-      product_image: offerToModify.product_image,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
-});
+);
 
-router.delete("/offer/delete", isAuthenticated, async (req, res) => {
+router.delete("/offer/delete/:id", isAuthenticated, async (req, res) => {
   try {
-    const offerToDelete = await Offer.findById(req.query.id);
+    const offerToDelete = await Offer.findById(req.params.id);
 
     if (req.user._id.toString() !== offerToDelete.owner.toString()) {
       return res.status(409).json({ error: "Unauthorized" });
     }
 
-    const public_id = offerToDelete.product_image.public_id;
-
-    await cloudinary.api.delete_resources(public_id);
-    await cloudinary.api.delete_folder(`/vinted/offers/${offerToDelete._id}`);
+    await cloudinary.api.delete_resources_by_prefix(
+      `vinted/offers/${req.params.id}`
+    );
+    await cloudinary.api.delete_folder(`/vinted/offers/${req.params.id}`);
 
     await Offer.findByIdAndDelete(req.query.id);
     res.json({ message: "Offer has been deleted" });
@@ -173,7 +209,10 @@ router.get("/offers", async (req, res) => {
       .limit(limit)
       .skip((page - 1) * limit)
       .populate("owner", "account");
-    res.json({ count: offers.length, offers: offers });
+
+    const count = await Offer.countDocuments(filters);
+
+    res.json({ count: count, offers: offers });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -22,10 +22,14 @@ app.use(userRoutes);
 const offerRoutes = require("./routes/offer");
 app.use(offerRoutes);
 
+app.get("/", (req, res) => {
+  res.json("Bienvenue sur l'API de Vinted");
+});
+
 app.all("*", (req, res) => {
   res.status(404).json({ message: "Page not found" });
 });
 
-app.listen(process.env.PORT, () => {
+app.listen(process.env.PORT || 3000, () => {
   console.log("Server started");
 });
