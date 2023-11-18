@@ -166,7 +166,7 @@ router.delete("/offer/delete/:id", isAuthenticated, async (req, res) => {
     );
     await cloudinary.api.delete_folder(`/vinted/offers/${req.params.id}`);
 
-    await Offer.findByIdAndDelete(req.query.id);
+    await Offer.findByIdAndDelete(req.params.id);
     res.json({ message: "Offer has been deleted" });
   } catch (error) {
     res.status(500).json({ message: error.message });
