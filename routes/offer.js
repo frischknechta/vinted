@@ -175,16 +175,19 @@ router.delete("/offer/delete/:id", isAuthenticated, async (req, res) => {
 
 router.get("/offers", async (req, res) => {
   try {
-    const limit = 10;
     const filters = {};
     let sorting;
 
-    let { title, priceMin, priceMax, sort, page } = req.query;
+    let { title, priceMin, priceMax, sort, page, limit } = req.query;
 
     if (sort === "price-desc") {
       sorting = { product_price: "desc" };
     } else if (sort === "price-asc") {
       sorting = { product_price: "asc" };
+    }
+
+    if (!limit) {
+      limit = 20;
     }
 
     if (!page) {
